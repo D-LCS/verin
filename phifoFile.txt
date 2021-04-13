@@ -1,0 +1,1022 @@
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ Journal inversé 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Liste des tests à la fin du fichier
+
+Liste des tâches restantes
+
+ - Général : vérifier la doc sur le protocole
+
+ - Stm32 : Faire des mesures analogique sur la Nucleo pour vérifier le fonctionnement de l'ADC (et récuperer le schema/routage)
+ - Stm32 : Vérifier les fins de courses par mesure de courant (avec l'ADC)
+ - Stm32 : IMU - tests sur la précision des valeurs calculées 
+ - Stm32 : Créer la fonction diagnostic
+ - Stm32 : Améliorer le demarrage de la carte ( pb lié vraisemblablement au capteur IMU) 
+ 
+ - Appli Qt : pour avoir des pourcentages de déplacement complet et pas des valeurs brutes /100
+ - Appli Qt : un indicateur de perte de connexion pour chaque carte
+ - Appli Qt : ajouter la fenetre de configuration des valeurs des positions
+ 
+ - Système : Appliquer les lois d'autom pour calculer les valeurs des PID
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 26/11/2020 : Interface verin blanc - instrumentation des mouvements, des variations de vitesse
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Réception carte V4 (2 exemplaires notés 11 et 12)
+La carte n°12 ne démarre pas
+
+1) Test flash, debug, swo, led , addresse
++ flash : ok
++ debug : ok
++ swo : ok
+- addresse : nok - ne fonctionne pas correctement, Les broches add_0 et add_1 sont vraisemblablement collées 
+
+2) Test liaison RS485
++ emission : ok
++ reception : ok
+
+3) Test commandes pont en H et capteurs associés
++ commande moteur voie A : ok
++ capteur analogique voie A : ok
++ capteur ILS voie A : ok
+- Mesure de courant voie A : nok (manque cablage resistance)
++ commande moteur voie B : ok 
++ capteur analogique voie B : ok
++ capteur ILS voie B : ok
+- Mesure de courant voie B : nok (manque câblage resistance)
+
+4) Centrale inertielle 
+La carte n°11 demarre et reste bloqué lors de l'initialisation de l'IMU
+
+ 
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 24/11/2020 : Interface verin blanc - instrumentation des mouvements, des variations de vitesse
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Mesure faite, mais pb lié à l'alimentation avec beaucoup d'oscillation au début du mouvement.
+
+pour supprimer le break dans le fichier cutecom.log :
+> tr < cutecom.log -d '\000' > cutecom.test
+
+https://bdesgraupes.pagesperso-orange.fr/UPX/Tutoriels/presentation_gnuplot.pdf
+pour tracer la courbe :
+> gnuplot -c plot.gnuplot
+
+fichier plot.gnuplot :
+set datafile separator ';'
+set style line 1 linecolor rgb '#0060ad' linewidth 2 # blue 
+set style line 2 linecolor rgb '#de181f' linewidth 2 # red 
+set xlabel 't (s)'
+set ylabel 'Position (points ADC)'
+
+plot 'cutecom.test2' using 1:2 title 'Consigne' with line linestyle 1, \
+'cutecom.test2' using 1:3 title 'Position' with line linestyle 2
+pause -1
+
+Si je lance en mode cycle le  déplacement, parfois ca ne demmare pas
+Je pense à la fonction detection de mouvement, PB avec le capteur analogique.
+Nouveau problème depuis lundi : hardfault handler - avec origine fonction kalman gyro 
+
+Création de la commande de configuration des sens de mouvement
+Bit 0 => sens du moteur
+Bit 1 => sens de l'ILS
+Bit 2 => configuration des interrupteurs fin de courses
+
+Création de la commande de configuration du seuils de courant 
+Bit 0..15 => valeur de seuil de courant de détection de fin de course 
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 19/11/2020 : Interface verin blanc - instrumentation des mouvements, des varaitions de vitesse
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ - Stm32 : Ajouter / modifier le traitement du capteur de position analogique
+ - Système : Générer les conditions pour faire les mesures de réponse à impulsion pour permettre l'identification
+
+Modification et recodage des objets servoMoteur et AnalogInput pour rassembler les mesures 
+capteurs. Modification et test, et modification communication
+
+Compilation OK
+Test pas OK, la carte consomme trop pour mon alim. 
+Alimentation à reparer !
+Demain j'en prendrai une au boulot.
+
+Utilisation des fonctions CMSIS DSP
+voir ici :
+file:///opt/stm32/Repository/Packs/ARM/CMSIS/5.6.0/CMSIS/Documentation/DSP/html/index.html
+utilisable pour : 
+	calcul des valeurs moyenne des valeurs analogiques : arm_mean_q15
+	calcul des filtres numérique : arm_fir_f32 ou arm_fir_fast_q31
+	calcul des PID : arm_pid_f32
+	
+pour les utiliser, il faut passer par cubeMX, software package
+Il faut choisir lib, (je n'ai pas réussi à utiliser les sources)
+puis selectionner dans Middleware
+
+Premier test avec calcul valeur moyenne arm_mean_q15
+Verdict sur la moyenne des points analogiques :
+
+      for (int i = 0; i < ANALOG_ARRAY_SIZE; i++)
+        {
+          tmp += rawValuesArray_[i];
+        }
+      averageValue_ = tmp / ANALOG_ARRAY_SIZE;
+comparé à 
+	  arm_mean_q15 ( (q15_t *) rawValuesArray_, ANALOG_ARRAY_SIZE, &tmp);
+      averageValue_ = (uint16_t)tmp;
+
+mesure à l'oscilloscope : 
+	34 à 46µs pour la première version
+	6 à 18µs pour la seconde
+Je ne comprends pas pourquoi c'est plus ou moins long (interruption ? valeur 0 ?)
+le gain minimum est de ~50%
+Si je regarde le code, DSP/Source/StatisticsFunctions/arm_mean_q15.c
+à part par le unrolling loop, je ne comprends pas le gain !
+     	  
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 17/11/2020 : Interface verin LA31 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1 mois - 1 mois pendant lequel je n'ai pas touché au journal, et durant lequel je n'ai pas avancé sur Phoenix.
+Pourquoi ?
+Congés - cours et TP semaine dernière, TD A4 sémaphores
+Confinement, Travail sur bille sur rail
+Visite V. Paolantonacci, début projet I4.7 
+Travaux sur Vidor
+
+les jours précédents : mise en place et test de github : problème de déplacement de projets d'un ordi à l'autre
+Validation schéma carte verin V4
+
+ - Stm32 : Ajouter les fonctions pour recaler la position des vérins
+ - Stm32 : Mémoriser la position dans la flash (annulé, c'est la carte principale qui s'en occupe)
+ - Système : Asservissement des 2 vérins en parallèle
+Hier : 
+Modification de la communication, ajout de la commande d'initialisation pour les vérins LA28 => a tester
+Création de la fonction de gestion des verins en parallele => a tester
+
+Ajourd'hui :
+Cablage cable pour la maison, recherche des brochages, mise en place des outils de tests 
+Tests fonction d'initialisation - PB - correction OK
+Mise en place de la fonction "lecture position" dependant de l'adresse
+Test : ne fonctionne pas, et en plus je ne retrouve pas le code modifié pour les mesures analogiques
+
+A faire : lire valeur analogiques du verin
+retrouver les modifs faites (fichier gros bug !)
+
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 16/10/2020 : Interface verin LA31 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ - Stm32 : Vérifier le fonctionnement des convertisseurs analogique/numérique
+ - Stm32 : Tester les vérins LA31 avec le capteur à effet HALL
+==> fait mais il faut ajouter du filtrage
+
+ - Appli Qt : pour avoir les positions chenilles configurables
+==> Fait mais à tester
+ 
+Semaine foutue : beaucoup d'interruption et pas beaucoup d'avancée sur la carte vérin.
+par contre du soutien à Corentin sur la carte principale pour le traitement de la reception en DMA, avec la boucle de traitement des emissions, des timeout, ou des reprises de communication
+
+La deuxième carte semble fonctionner
+
+En discutant avec Damien, on avait dit qu'un des boutons permettait de choisir entre LA28 et LA31. Je ne me
+rappelait plus.
+Donc il faut modifier servo pour envoyer ILS et valeur analogique. C'est lors de la regulation (donc en fonctionnement)
+qu'on choissira si c'est analogique absolu ou numérique et relatif
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 12/10/2020 : Interface verin LA31 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ à faire
+    Cablage d'un verin et test de position
+    Tester le code STM32 pour la commande des vérins
+    Modification de l'application Qt pour configurer 3 ou 4 positions
+
+Vérification du fonctionnement actuel
+    
+Décablage :
+    sur mot A (en partant de l'alim) : bleu, rouge, vert, jaune)
+    sur mot B (en partant de mot A ) : bleu, rouge, vert, jaune)
+
+Cablage : d'après le mail du 01/10/2020 à 10h49
+Alimentation du capteur de 12 à 24, donc il faut R27 sur la carte et pas R26
+Sur Mot A (en partant de l'alim) bleu, brun
+et du coté capteur : (en partant du coin de la carte) Masse (rouge), Vin(vert), Vcc (jaune)
+
+Mesure : La tension ne monte jamais à plus de 5 volts, donc cablage sans crainte
+
+Observation des valeurs live : semble bouger dans le bon sens mais avec beaucoup de bruit 
+        
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 2020 : Test fonctionnement IMU
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Ajout des fonctions liées à l'IMU et tests de communication
+==> Ok
+A faire :
+    IMU - tests sur la précision des valeurs calculées 
+
+ 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 29/09/2020 : Communication Carte vérin STM32 et application PC 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Passage sous git fonctionnement semble OK
+Modification du code USART pour utiliser le DMA
+Récupération du code HBS
+
+Principe :
+    un buffer est rempli par DMA,
+    Le buffer est plus grand que le plus grand des paquets,
+    l'interruption DMA fin de paquet n'arrive jamais (ne doit jamais arriver)
+
+    L'USART est configuré pour détecter la ligne "IDLE" (repos) et génere une interruption
+    On transfère alors le buffer DMA sur le buffer interne et on traite le message comme avant
+
+PB : Dans le cas du lien avec le PC, l'USART détecte une erreur de frame avant de detecter la ligne "IDLE"
+     Ajout dans  l'interruption de la detection d'erreur de frame et sauvegarde des caractères déjà reçus
+
+PB2 : Dans le fonctionnement précédent, la lecture du buffer de reception n'était pas faite par interruption (voir plus bas)
+    Il faut supprimer le code actuel (datareadyII)
+
+Fonctionnement semble OK
+Passage à 57600 bauds
+--> Ok
+
+Correction des acquitements avec minuscules (comme décrit dans le doc de protocole (acquitement pour TOUT les messages)
+--> Ok pour les messages Led, Position et Mouvement
+
+Suppression du générateur de position de test (utilisé pour remplacer les mouvement des vérins)
+
+Ecriture des fonctions move forward/reverse et stop (Stm32 et appli Qt) + tests
+--> stop fonctionne, pas forward ni reverse
+
+correction : pb dans la table de reconnaisaance sur le stm32 (valeur sur 8bits) donc LSB_HIGH
+--> Fonctionnement OK
+A tester les min et max avec le capteur de courant
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 24 & 25/09/2020 : Communication Carte verin STM32 et application PC 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Modification du code Qt pour avoir une seule fonction d'emission et une attente d'acquitement
+
+Lorsque le cycle de demande de position est interrompu par une commande led, il y a blocage de ?
+Sur le stm32 j'ai laissé le piège ==> GRRR, passage en commentaire
+
+Ajout sur l'application PC d'une attente d'acknoledgment. Modification des 2 cotés pour acquitter le message
+avec lettre minuscule (comme prévu dans le doc sur le protocole ==> à modifier
+
+A faire :
+    - reprendre les autres acquitements pour passer avec les lettres minuscules sur l'acquitement
+    - modifier le doc protocole
+    - passer la com STM32 en DMA (reprendre le code de HBS)
+    - vérifier le fonctionnement du converstisseur AN
+    - tester le capteur à effet HALL du LA31 (priorité pour la mécanique)
+    - ajouter les fonctions "move" forwards, backward et stop et les tester
+    - sur l'appli Qt, creer des fonctions de positionnement sur des valeurs particulière pour les LA31
+        avec asservissement en position sur les capteur à effet HALL
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 22 & 23/09/2020 : CxSM
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Installation PC sous windows
+Installation de crossworks => Pb de license
+Desativation licence PC Linux et mail à Rowley pour obtenir une autre license
+License arrivée à 12h11
+Compilation OK
+Debug : point d'arret OK,
+Test du clignotement de led OK (fichier CXSMAPP.C) fonction testLed
+Test de la lecture du Joystick et affichage sur la 4 leds : OK (fichier CXSMAPP.C) fonction TestJoystick
+Je suis content
+
+----- break
+
+23/09/2020
+Cablage de 2 résistances de 1K2 (pour 20mA) sur les channels 7 et 8
+On désactive les seuils de consommation sur les channel 7 et 8 avec RNet
+
+ajout de deux variables globales (ICAM_ et de deux "getters" getICAM
+Si joystick en X ou en Y et val min = -32768,  val max +32767 
+puis 
+Modification du code pour activer les channels (fichier CHANNELDRIVE.C) dans la fonction UAInterface_ServiceChannelDrive (à la fin) 
+pData->ServiceChannelDrive.ChannelOutputDemand[6] = ChannelDemand_Service(&itsChannelDrive.itsChannelDemand[6],getICAM_X());
+pData->ServiceChannelDrive.ChannelOutputDemand[7] = ChannelDemand_Service(&itsChannelDrive.itsChannelDemand[7],getICAM_Y());
+Verdict : fonctionne pour Y et pas pour X
+Renverse X et Y Idem
+Le problème vient du fait que le programme cherche à changer d'axes (il n'y a pour le moment que l'axe 7)
+et annule la commande de mouvement
+Pas mal d'essais en vain
+Idée : la fonction test joystick est déplacée dans le fichier AXISDRIVE.C et on triche sur le quadrant.
+Pas super propre mais complètement fonctionnel :
+
+En mode seating :
+quand le joystick est en haut la led 2 s'allume et le channel 8 est à +24V
+quand le joystick est en bas la led 3 s'allume et le channel 8 est à -24V
+quand le joystick est à gauche la led 4 s'allume et le channel 7 est à -24V
+quand le joystick est à droite la led 1 s'allume et le channel 7 est à +24V
+quand le joystick est relaché aucune led n'est allumée et les deux "channels" sont à zero
+
+On cloture le programme du CxSM ?
+
+Tests supplémentaires fait par les etudiants : utilisation des inhibits pour limiter la vitesse des moteurs de propulsion
+Dans un premier temps avec un potentiometre sur l'entrée inhibit du Power Module
+Dans un second temps avec une alimentation sur l'entre 18 du CxSM
+Constatation : la tension est seulement possible sur le CxSM (pas sur les autres inhibits)
+Sur la carte principale Icam on va utiliser un DAC pour générer des tensions. Une pour commencer
+Ex. MCP4822-E/P, 2 voies, 12 bits-Bit, Série (SPI/Microwire), PDIP 8 broches
+Pas bon d'après Damien, il ne générer pas plus que 2,48V
+Il existe le même avec référence de tension externe
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 21/09/2020 : Pb ADC
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+L'ADC ne fonctionne pas comme prévu : prévu : acquisition à 10 KHz ou 100µs
+Configuré au départ avec déclenchement par timer Channel 2 ==> marche pas
+Essai avec sortie sur la broche et Output compare à 50µs soit le cycle de Timer 1
+Rappel Timer 1 : prediviseur 12 - Cycle 200 ==> soit 48MHz / 12 * 200 = 20000 Hz
+
+Au lieu d'utiliser le timer, ajouter des conversions pour rien pour augmenter le temps de cycle
+solution actuelle mesuré à l'oscillo :
+Current A (in9), current B(in8), Hall A(in4), Hall B(in6) avec temps d'échantillonnage de 112
+Temperature avec 480
+dummy 1 = (in4) 112 + in6 112 + in8 28
+
+Par calculs : voir feuille calcul periode ADC : théorie différente de la pratique
+Pourquoi ?
+
+Ne pas oublier de faire une table DMA complet à 2 fois le nombre d'échantillons (ou plus en fonction de la période voulue)
+
+A faire :
+    Verifier le fonctionnement de l'ADC (lire les valeurs converties et filtrées)
+    Refaire les tests moteurs
+    Sur l'outil Qtcreator, faire une fonction globale pour l'emission des requêtes
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 18/09/2020 : PB Communication bi-directionelle
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Trouvé : piège = le parcours dans la table des commandes pour retrouver la commande est faite par copie
+Lorsque on memorise la commande on mémorise la copie GRRRR !!!!
+Une fois la copie detruite le pointeur est inutile
+https://www.learncpp.com/cpp-tutorial/6-12a-for-each-loops/
+
+Transformation: parcours avec une reference plutôt que avec une copie.
+Le pointeur est alors sur l'element du tableau et ca marche !
+
+Bug : j'ai laissé le test ascii avec 2 bugs inférieur à la place de <= (pourquoi, je me rappelle l'avoir corrigé ?)
+
+A faire :
+    la correction du convertisseur analogique
+    l'emission de requette centralisé : si 2 requetes simultanées => plantage stm32
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 16/09/2020 : PB Communication bi-directionelle
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Modification de ADC dans IOC : désactivation de DMA continuous => ADC fonctionne les deux premières fois et puis plus après
+
+Recherche de l'interruption de 300µs
+C'est le timer : j'ai laissé la demande imu dans le timer ! grrr !!!
+deplacement dans la tâche de fond, et ne fonctionne plus ==> pourquoi
+
+Par contre l'ADC ne fonctionne plus ==> à réparer
+La réception dans l'appli PC ne fonctionne toujours pas ==> a comprendre 
+
+Pas de grosse avancée aujourd'hui mais après midi passée avec Emmanuel Galen en préparation Cours et TP
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 15/09/2020 : PB Communication bi-directionelle
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Dans l'interuption de réception, ajout d'un toggle led.
+Observation : si le toggle n'est pas régulier, pas de reception correcte
+14µs entre la fin de reception du caractère et le basculement de la led
+178µs pour la reception d'un char
+
+Théoriquement : 57600 baud = 17.36µs le bit soit 173.6 µs le char (8bits + 1 start + 1 stop)
+et le micro n'est pas assez rapide !!! je suis deçu !!!
+actuellement clock µC = 48MHz
+Solution :
+    mettre l'usart en DMA
+    supprimer les objets génériques et repasser en traditionnel
+    augmenter la fréquence d'horloge
+
+L'aiguillage entre les objets (pour le moment il n'y en a qu'un) de l'it coûte 1.9µs
+Entre l'entrée dans l'aiguillage (mon code) et la sortie, ça coûte 6µs
+Toogle en rentrant dans l'IT (fichier stm32f4xx_it.c) et juste avant de sortir : 11µs
+
+Solution : passer en DMA avec détection de la fin de bloc (comme sur HBS)
+Après lecture approfondie du fonctionnement de l'IT Usart et des blog ST sur l'USART aussi
+Une autre idée :
+    creer 2 buffers temporaires
+    connecter un buffer dans lequel l'it HAL écrit (demarrage IT normale)
+    régulièrement (en tâche de fond), lire si le buffer courant contient qqchose
+        si il contient qqchose,
+            arreter les it
+            changer de buffer courant et reinitialiser les index
+            relancer les it
+            vider le buffer mis de coté dans le buffer normal
+    Création de la fonction isDataReadyII ()
+
+Avantage :
+    l'it n'est jamais arrétée, le buffer permet un souplesse pour les temps de lecture ou d'utilisation
+    jamais d'appel à la fonction callback, et la fonction d'it ne passe jamais par mon code
+    semble fonctionner
+
+Mais toujours le problème d'overrun
+Passage à 9600 bauds et là ça marche mieux
+
+
+Observation :
+    En utilisant la remanence de l'oscillo, il y a parfois un decalage de 280µs entre 2 fonctionnement normaux 
+
+    Si j'ajoute une mise à un de la led en entrant dans chaque IT et repasse à zero a la fin
+    Une it est très présente, mais assez rapide (10µ) toutes les 40µs (apparemment c'est le DMA de l'ADC)
+        et c'est pas normal puisque je voulais le cadencement par le timer à 100µs
+
+    Par contre observation indirecte : cette interruption très fréquente est interrompue pendant 320µs
+    par une autre it ?
+    donc vraisemblablement elle qui verole par overrun ma reception serie      
+
+A faire
+    Comprendre et reprendre le code du CAN avec l'arret entre deux coups de timer
+    trouver l'it coupable du blocage de 320µs
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 14/09/2020 : Communication bi-directionelle
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Codage des fonctions
+    - commandGetPosition
+    - prepareToSendPosition
+
+Recopie des fonctions crée pour le Stm32 et inclusion dans le projet QtCreator
+
+Compilation OK.
+Fonctionnement parfois - assez rare
+
+A l'exécution, hard fault ???
+avec le piège, on s'aperçoit que le pointeur de fonction est vérolé.
+Si on pose un watchpoint sur cette variable, on s'apercoit qu'elle est utilisée dans HAL_GPIO_Read ????
+Je ne sais pas si elle est utilisée en lecture ou en écriture
+    - apprendre à utiliser le watchpoint avec seulement ecriture
+    - comprendre pourquoi elle s'arrete dans le fonction GPIO_Read
+  
+A l'oscilloscope - la réponse existe souvent (mais pas toujours)
+
+A faire :
+    - ajouter une détection de PB de réception pour relancer l'usart sur le STM32
+
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 9 10 & 11/09/2020 : Tests moteurs avec IHM
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Discussion avec Yassine
+    retrouver le schéma proposé par Simona pour l'asservissement en vitesse et position de robots mobiles
+    produire les courbes permettant l'identification des actionneurs.
+    cad :
+        plusieurs courbes représentant la réponse à l'échelon du système (0à50%, 0à75%, 0à100%, 25% à 50%, etc.)
+        avec la mesure de la position ET de la vitesse
+
+Après avoir vu yassine : codage de la rampe actuelle non judicieux
+Sens de cablage pose des problèmes lié aux correction effectuées : bugs
+Modification du code et restructuration assez profonde
+Non fonctionnelle (marche pas du premier coup)
+
+Besoin : connaitre la position en temps reel
+
+1ere étape :
+    modification de l'ihm pour afficher des variables
+
+Reste à faire :
+    codage de la fonction d'émission des positions des verins
+    fonction de réception sur l'ihm
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 08/09/2020 : Tests moteur avec IHM
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Constat les moteurs fonctionnenent en sens opposés : le cablage est inversé (c'est bien pour les tests)
+Tentative de correction dans le code mais pas de résultats ==> A revoir dès demain
+Configuration à faire par la communication
+
+Voir Yassine pour l'asservissement
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 07/09/2020 : Mise en oeuvre communication 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Mise en place de l'application sur le PC : strategiquement le code en python semble plus facile mais je n'y connais rien
+Tentative de coder la meme chose en C++ sur Qt creator : impossible de reutiliser l'IHM déjà crée ==> pourquoi ?
+pas d'explication, donc creation d'une nouvelle IHM (en quelques minutes)
+Fin de journée : 
+Led commandée par l'application sur le PC ==> Ok
+Moteur commandé par l'appliPC ==> Ok
+Discrimination vérin pair et impair ==> Ok
+oubli de la fonction cyclique pour la gestion du moteur ==> corrigé
+
+Mais :
+    le système ne réagit pas a chaque appui sur le bouton : pourquoi ?
+    les moteurs tournent en sens inverse : pourquoi ?
+    
+A faire :
+    Ajouter des mouvement cycliques
+    Ajouter la communication montante (position des verins)
+    travailler sur l'asservissement des 2 verins en //
+
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 03 & 04/09/2020 : test détection fin de course 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Recodage de la classe ISense, utilisation de pyFDA (python Filter Design and Analysis)
+Integration du filtre directement par #include du fichier de coefficient
+Rappel : fréquence d'échantillonage cadencé par un timer, donc assez précis ==> 100µs ou 10 KHz
+Choix d'un FIR plutôt que IIR, 64 coéfficients, fenetre de Hamming, fréquence de coupure à 100Hz
+Fonctionnement semble convenir
+Détection avec le verin long de test, si j'appui assez fort, arrêt.
+Au passage, modification de la classe servo moteur pour intégrer cette détection
+Ajout de la remise à zéro possible ou pas = booleen en paramètre.
+
+A faire :
+    Utilisation et mise en oeuvre de la communication pour faire bouger les verins automatiquement
+    Comme d'habitude, commencer par la led
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 02/09/2020 : test détection fin de course 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Mise en place du SWO pour faire des prints => super, mais toujours utiliser des variables globales
+La lecture du courant ne fonctionne pas !
+
+Corrigé : il ne faut pas oublier de faire le cyclictraitement
+modifié, avec un 
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 01/09/2020 : reprise carte verin
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Mise en conf du projet
+Déplacement du projet sur le dossier projet "fauteuilPhoenix" au lieu de stm32_workspace
+Par contre copie de la libraire phifoLibStm32 au lieu d'utiliser celle du workspace
+==> pb à resoudre avant de reutiliser la lib ailleurs
+
+A faire :
+	- cablage des vérins de la maquette bois sur la carte   
+	- codage du principe de fin de course soft (pb du petit vérin qui bouzille le bois)
+	- codage de la mise à zéro sur détection de sur-intensité
+	- asservissement de deux vérin en //
+
+Reprise du code sur la lecture du courant
+Création de la classe Isense
+
+A tester et ajouter dans le fonctionnement de la classe servo la détection de surintensité
+
+Ajouter la lecture diagnostics de l'IFX9201
+ 
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 27/08/2020 : mise en oeuvre carte STM32F429-DISC1 avec TouchGfx V4.14
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Hier : installation de stm32cubeIde sur la machine virtuelle Windows
+création d'un projet à partir de STM32
+	- modification de l'ioc (avec Marie)
+Pb de compilation
+	- un lien include fonctionne pas (en le recreant c'est bon)
+	- récuperation d'un main complet
+	- modification des fichiers de link
+
+Compilation OK, semble fonctionner, mais rien ne s'affiche
+Donc echec si création à partir de cubeIDE sous linux et sous windows
+
+Pour vérifier : création d'un nouveau projet sous touchGFX seulement
+Procédure
+	Recopie du projet sur un répertoire accessible sous linux (stm32cube sous windows est vraiment trop lent)
+	Compilation
+	Edition de lien ne fonctionne pas : librairie introuvable
+	Modification des config du projet
+		modification du répertoire lié à C:/ (windows)
+		remplacement par ../../Middleware...
+		modification du nom de la lib : suppression du ".a" et de lib devant le nom
+
+	Compilation (et édition de lien) et debug, et fonctionnement OK
+	Il manque l'image de fond
+
+A faire : trouver les modifications apportées à l'IOC ou au projet qui empèche le fonctionnement 
+
+Problème avec la version 4.14
+On revient sur la 4.13
+	Procedure = modification du répertoire lié à C:/ (windows) remplacement par ../../Middleware.
+	et c'est la seule modif
+	Mais dès qu'on modifie l'IOC le projet ne compile plus,
+	il manque des répertoires include du projet supérieur
+	
+Conclusion : 
+	ne pas utiliser la 4.14
+	ne pas utiliser linux pour modifier l'ioc
+
+touchgfx sous windows, stm32cubeIde et cubeMX sous windows, puis debug et code sous linux.
+Par contre danger si modification de fichiers générés
+développement compliqué en croisé si modification de touchgfx ou de l'ioc (git obligatoire)
+
+Ca marche toujours pas.
+Configuration avec Marie. En fait cubeMX doit être lancé independemment de cubeIDE et là ça fonctionne.
+
+Pas de trace de l'utilisation de la version 4.14 dans les forum ou sur youtube
+
+Conclusion provisoire :
+	ne pas utiliser la 4.14
+	ne pas utiliser linux
+	ne pas utiliser cubeMX intégré à cubeIde
+
+La solution : 
+	utiliser la 4.13 sous windows (machine virtuelle) --> Création du projet
+	modifier avec cubeMX sous windows (ajout des leds, de la liaison serie, de l'USB)
+	générer le code 
+	a partir de là, on peux utiliser linu, mais attention, les fichiers modifiés à la main risquent d'être modifié aussi par les générateurs de code
+
+
+ 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 25/08/2020 : mise en oeuvre carte STM32F429-DISC1 avec TouchGfx V4.14
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Importer le projet généré par touchGfx
+
+Essai avec import/general/projects from folder archive
+projet dejà importé ==> PB
+
+
+création d'un nouveau projet avec touchgfx : ne compile pas
+import/File System" (avec lien) de myapp (genéré par touchgfx designer)
+
+Selon cette doc :
+https://support.touchgfx.com/docs/development/ui-development/working-with-touchgfx/using-ides-with-touchgfx
+
+ajouter les chemins d'include suivants :
+<touchgfx_application_root_directory>/generated/gui_generated/include
+<touchgfx_application_root_directory>/generated/fonts/include
+<touchgfx_application_root_directory>/generated/images/include
+<touchgfx_application_root_directory>/generated/texts/include
+<touchgfx_application_root_directory>/touchgfx/framework/include
+<touchgfx_application_root_directory>/gui/include
+<touchgfx_application_root_directory>/platform/os
+
+Inclure par création de liens de projet (Projet/import/file system
+- generated
+- gui
+- touchgfx (en minuscule) (enlever le simulateur)
+
+Ajouter la librairie (touchgfx/lib/core/cortex_m4f/gcc/libtouchfx-float-abi-hard.a
+
+Compilation OK, exécution non mais normal, le main est vide
+
+Ajout de la tâche GUI dans le main et modifition de CMSIS_V1 en V2
+Compilation OK, exécution non.
+
+Je pense être sur la bonne voie, mais je n'ai pas tracé suffisament pour pouvoir le reproduire et 
+surtout, ça ne fonctionne pas.
+
+A faire : 
+essayer l'écran et vérifier que la mémoire est correctement initialisée
+
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 24/08/2020 : mise en oeuvre carte STM32F429-DISC1 avec l TouchGfx V4.13
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Téléchargement et installation du 4.13
+Generation du projet myApp_4.13_I ==> OK
+modification de l'IOC impossible
+déplacement de l'ioc dans le projet "nested" et l'ioc peut s'ouvrir
+ajout des leds
+Géneration du code complet ==> compilation impossible. les deux projets ne se connaissent plus
+
+Id : creer un projet sur Cube IDE et importer le code généré par touchGFX designer => à la main trop difficile,
+trop de fichiers manquants.
+
+Id suivante : 
+ - comprendre comment les nested projet fonctionnent.
+ - modifier le code generé par touch GFX pour avoir les leds (par exemple, pour ne pas avoir à modifier l'IOC)
+
+Passer entièrement sous windows puisque Pour Marie, ça fonctionne avec la V4.13
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 21/08/2020 : mise en oeuvre carte STM32F429-DISC1
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Téléchargement et installation Windows XP sur machine virtuelle
+(la machine dejà existante ne se lance pas)
+TouchGFX : installation impossible cat XP est trop vieux
+
+Téléchargement et installation Windows 7 sur machine virtuelle
+Installation de TouchGFX designer version 4.14
+Essais du simulateur => OK
+Copie du projet et compilation sur stm32
+1 problème : le linker ne trouve pas la librairie touchGFX
+Dans les config de recherche de lib , il prend le chemin windows.
+il faut le changer en ../../Middleware/etc
+Test sur STM32 ==> OK
+
+Test suivant : ajouter la led à chaque appui sur le bouton virtuel
+On ouvre l'ioc et on ajoute les leds (elles n'y sont pas de base : bizzare)
+On regenère le code et patatrac : çà ne compile plus et j'ai essayé pendant + d'une heure de corriger les chemins de recherche et autres ==> trop difficile à corriger
+
+D'après Marie Bonnet : repasser sur le 4.13
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ pas de journal ??? entre le 5/06 et le 17/08 ??? ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 5 juin : Test Yakindu
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Je suis convaincu que le C++ amènerait beaucoup de simplification vu des étudiants.
+Donc tentative d'utiliser la sortie C++ de Yakindu.
+Travail toute la journée et echec
+
+A faire
+Sur le github de Yakindu il y a des exemples de code pour STM32 (sans HAL)
+Je ne les ai pas trouvé judicieux
+et peut être aussi sur Arduino
+A voir
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 12/05/2020 - Essai de programmation CxSM
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Connection effectuées
+1ere tentative => échec programmation semble OK mais après plus rien;
+Hypothèse : il faut le kernel de debug (sans le watchdog)
+
+Dans les installations il existe JFlashLiteExe
+Essai avec le fichier CxSM_Debug.s19 dans le répertoire docs/CxSM_SDK_Generic_CD_2.9/Generic CD 2.9/Kernel files - FOC/FOCBin
+Par contre changement du fichier d'édition de lien - les adresses ne doivent pas correspondre.
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ 11/05/2020 - compilation d'un programme de test avec le Crossworks de Rowley 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+La version officielement supportée est la 
+Rowley Associates CrossWorks for ARM 1.7 Build 22,
+
+J'ai installé la version 
+CrossWorks for ARM Release 4.5.0.2019092300.40109 Linux x64 © 1997-2019 Rowley Associates Ltd.
+GCC/BINUTILS: Built using the GNU ARM Embedded Toolchain version 8-2019-q3-update source distribution
+Clang/LLVM: Built using the version 9.0.0 source distribution
+
+Lorsqu'on tente de compiler le linker annonce un Pb de version de librairie
+version EABI de la lib 0, version actuelle 5
+
+Dans une aide on trouve :
+Known ARM ABIs (for use with the -mabi= option):
+    aapcs aapcs-linux apcs-gnu atpcs iwmmxt
+
+Pb Pb Pb
+
+Passage sur STM32CubeIde
+
+Après pas mal d'essais, il existe 
+-Wl,--no-warn-mismatch à passer au linker
+
+J'essaye cette option sur le Rowley
+Ok pb suivant le linker (toujours lui) m'embete avec cette ligne :
+  .data : AT (ADDR(.text) + SIZEOF(.text)) 
+
+que je transforme en 
+  .data : /* AT (ADDR(.text) + SIZEOF(.text)) */
+
+Programmation completed : mais maintenant est'ce que ça marche ?
+
+Installation des librairies segger
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ Debut du journal
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Intégration Hard-Soft carte vérin
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Ce document rassemble les tests à réaliser pour l'intégration de la carte électronique dite "carteVerins" pour le projet du fauteuil Phoenix  
+La première partie concerne les tests de câblage d'une nouvelle carte
+La deuxième partie concerne les tests d'intégrations Hard/Soft permettant de tester la carte.
+La troisième partie concerne l'intégration de l'application
+
+Les tests unitaires concernent les fonctions algorithmiques de l'application
+Les tests unitaires des fonctions lièes au hardware sont remplacées par les tests d'intégrations des sous-ensembles décrits dans la première parties de ce document.
+  
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## Vérification câblage 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Dans le fichier application.cpp, utilisation des fonctions d'intégration Hard/Soft
+Choisir la fonction à tester (à la fin du fichier, et commenter les autres)
+
+### Debug / Programmation / Configuration microcontrôleur / Led / Config adresse
+Fonction : tc_ledAddressDebug ();
+La carte est alimentée par le connecteur RJ45 ou par les points de tests
+La carte est connecté au STlink dans le bon sens !
+Télécharger le projet et lancer l'exécution
+Vérifier la visualisation dynamique (SWV ITM Data Console)
+
+#### Vérifications
+ - La programmation peut se faire
+ - La led clignote 
+ - La console SWV ITM affiche la valeur des DIP SWITCH (traduit en adresse)
+
+#### Sous-ensembles testés
+ - Câblage et alimentation µC
+ - Boot
+ - Câblage connecteur debug
+ - Configuration horloge
+ - Câblage led
+ - Câblage interrupteurs choix adresse
+ 
+### Liaison série - RS485
+Fonction : tc_usart ();
+Câbler la liaison RS485 avec un adaptateur RS485/USB ou RS485/RS232 
+Relier à un PC et un émulateur de terminal (par exemple cutecom)
+Configurer la vitesse à 57600 bauds
+
+#### Vérifications
+Sur le terminal on doit voir s'afficher le message et les caractère reçus
+et si on envoie des caractère, un message nous indique les caractères reçus 
+
+#### Sous-ensembles testés
+ - Câblage port UART2, IC3 et connectique J4 
+ - Configuration port UART2, interruptions et DMA
+ - Pilote de liaison série RS485
+
+### Moteurs
+Fonctions : tc_moteurs ();
+La liaison RS485 et le terminal sont toujours branchés
+Câbler 2 vérins, un LA28 et un LA31 et le 24V
+
+#### Vérifications :
+ - Les 2 verins doivent bouger alternativement dans un sens et dans l'autre
+ - Le capteur ILS doit changer en fonction du déplacement du vérin
+ - La valeur brute ADC doit evoluer en fonction de la position du vérin
+ - La valeur du courant mesuré doit refleter la conssommation instantanée 
+ puis inverser LA28 et LA31 ou au moins leurs capteurs repectifs
+ - Le capteur ILS doit changer en fonction du déplacement du vérin
+ - La valeur brute ADC doit evoluer en fonction de la position du vérin
+ - La valeur du courant mesuré doit refleter la conssommation instantanée 
+ 
+#### Sous-ensembles testés
+ - Câblage des ponts en H
+ - Câblage des capteurs ILS
+ - Câblage des capteurs à effet HALL
+ - Câblage des références du CAN (ADC) 	 
+ - Câblage des mesures analogiques de courant
+ 
+### Centrale Inertielle
+Fonction : tc_IMU ();
+La liaison RS485 et le terminal sont toujours branchés
+
+#### Vérifications :
+ - Les valeurs affichées sur le terminal doivent varier en fonction des mouvements de la carte
+
+#### Sous-ensembles testés
+ - Le câblage de la centrale et la communication (Alim, SPI)  
+  
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## Intégration hard/soft
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+!!! retrouver les messages modifiés dans github
+
+
+### Centrale inertielle - MPU6050
+
+Intégrer le pilote du MPU6050 (fonctions d'accès, d'initialisation, ...) 
+Afficher les valeurs brutes accéléromètre et gyromètre
+
+#### Sous-ensembles testés
+ - Câblage de la centrale inertielle
+ - Configuration liaison I2C  
+ - Pilote de communication I2C et MPU6050
+
+
+### Commande moteur 
+
+Intégrer le pilote du pont en H
+Tester le fonctionnement dans les deux sens, à 100% et en PWM
+Tester la détection d'erreurs 
+Intégrer les fonctions de communication et de commande des moteurs
+
+#### Sous-ensembles testés
+ - Câblage et configuration ports GPIO
+ - Configuration TIMER en PWM ou en TOR
+ - Configuration liaison SPI
+ - Détection et lecture de circuit ouvert, court circuit
+ - Pilote pour les ponts en H
+
+
+### Lecture des impulsions du vérin
+
+Intégrer le pilote du capteur
+Tester la précision (ou la répétabilité) d'une commande de mouvement du vérin
+Tester les deux voies simultanément
+
+#### Sous-ensembles testés
+ - Câblage et configuration entrées capteurs ILS
+ - Pilote d'interruption des capteur ILS
+ - Câblage et configuration des capteurs effet Hall
+ - Pilote des capteurs affets Hall 
+
+
+### Capteur de courant
+
+Intégrer le pilote de lecture du courant
+Inventer une manip de blocage du vérin pour obtenir la mesure du courant de blocage
+Tester les deux fins de courses (complètement rentré, complètement sorti)
+Tester petits vérins et gros vérins 
+
+#### Sous-ensembles testés
+ - Câblage et configuration capteur de courant
+ - Pilote de lecture des capteurs de courant
+ - Pilote de détection de fin de course mécanique 
+
+### Fin d'intégration Hard/Soft
+
+### Configuration adresse 
+
+Intégrer la fonction de lecture des broches de configuration de l'adresse
+Afficher la valeur lue sur la liaison série ou sur la visu dynamique 
+
+#### Sous-ensembles testés
+ - Câblage 5 ports GPIO en entrées
+ - Configuration des GPIO, des pull-ups, ... 
+ - Vérification de la fonction de calcul de l'adresse BUS de la carte 
+
+
+ 
+Ecrire un programme permettant de tester le câblage des autres cartes
+
+#### Sous-ensembles testés
+ - Câblage de la carte
+
+
+## Intégration application
+
+### Sous-ensemble IMU
+
+Intégrer la bibliothèque ST MotionFX
+Afficher les valeurs du vecteur gravité calculées
+Tester avec le programme d'affichage de l'avion en processing  
+Ajouter les fonction d'autotest, de calibration et de mise à zéro du réferentiel
+
+#### Sous-ensembles testés
+ - 
+
+### Sous-ensemble moteurs
+
+Intégrer les fonctions de régulation des vérins en parallèle
+Tester la précision et la répétabilité
+
+#### Sous-ensembles testés
+ - 
+
+### Sous-ensemble communication
+
+Intégrer et tester le protocole de communication 
+
+#### Sous-ensembles testés
+ - 
+
+### Application
+
+Vérifier sur une maquette le fonctionnement en parallèle de toutes les parties
+
+#### Sous-ensembles testés
+ - 
+
+
+
+
+
+
+
